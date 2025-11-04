@@ -197,5 +197,3 @@ class AIAbstractor_Action extends Typecho_Widget implements Widget_Interface_Do
         $this->response->throwJson(array('text' => $text));
     }
 }
-
-
