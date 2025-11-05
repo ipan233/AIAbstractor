@@ -67,8 +67,8 @@ class AIAbstractor_Plugin implements Typecho_Plugin_Interface
         $form->addInput($postSelector);
 
         $autoInject = new Typecho_Widget_Helper_Form_Element_Radio(
-            'autoInject', array('1' => _t('开启'), '0' => _t('关闭')), '1', _t('自动插入前端资源'))
-        ;
+            'autoInject', array('1' => _t('开启'), '0' => _t('关闭')), '1', _t('自动插入前端资源')
+        );
         $form->addInput($autoInject);
     }
 
@@ -76,6 +76,16 @@ class AIAbstractor_Plugin implements Typecho_Plugin_Interface
 
     public static function header()
     {
+        // 检查是否在管理后台或特殊页面，如果是则直接返回
+        if (isset($_SERVER['REQUEST_URI']) && (
+            strpos($_SERVER['REQUEST_URI'], '/admin/') !== false ||
+            strpos($_SERVER['REQUEST_URI'], '/action/') !== false ||
+            strpos($_SERVER['REQUEST_URI'], '/feed') !== false ||
+            strpos($_SERVER['REQUEST_URI'], '/rss') !== false
+        )) {
+            return;
+        }
+        
         $options = Helper::options();
         $pluginUrl = rtrim($options->pluginUrl, '/') . '/AIAbstractor';
         $css = $pluginUrl . '/assets/css/ai_abstractor.css';
@@ -88,6 +98,16 @@ class AIAbstractor_Plugin implements Typecho_Plugin_Interface
 
     public static function footer()
     {
+        // 检查是否在管理后台或特殊页面，如果是则直接返回
+        if (isset($_SERVER['REQUEST_URI']) && (
+            strpos($_SERVER['REQUEST_URI'], '/admin/') !== false ||
+            strpos($_SERVER['REQUEST_URI'], '/action/') !== false ||
+            strpos($_SERVER['REQUEST_URI'], '/feed') !== false ||
+            strpos($_SERVER['REQUEST_URI'], '/rss') !== false
+        )) {
+            return;
+        }
+        
         $options = Helper::options();
         $pluginUrl = rtrim($options->pluginUrl, '/') . '/AIAbstractor';
         $css = $pluginUrl . '/assets/css/ai_abstractor.css';
@@ -136,7 +156,11 @@ class AIAbstractor_Action extends Typecho_Widget implements Widget_Interface_Do
         $apiKey = isset($settings->apiKey) ? trim($settings->apiKey) : '';
         $model = isset($settings->model) ? trim($settings->model) : 'gpt-4o-mini';
         $temperature = isset($settings->temperature) ? floatval($settings->temperature) : 0.3;
+        // 限制 temperature 范围在 0-2 之间
+        $temperature = max(0, min(2, $temperature));
         $maxTokens = isset($settings->maxTokens) ? intval($settings->maxTokens) : 256;
+        // 确保 maxTokens 为正整数
+        $maxTokens = max(1, $maxTokens);
 
         if (!$apiBase || !$apiKey) {
             $this->response->setStatus(500);
@@ -145,6 +169,13 @@ class AIAbstractor_Action extends Typecho_Widget implements Widget_Interface_Do
 
         $raw = file_get_contents('php://input');
         $json = json_decode($raw, true);
+        
+        // 验证 JSON 解析是否成功
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $this->response->setStatus(400);
+            $this->response->throwJson(array('error' => 'Invalid JSON'));
+        }
+        
         $q = isset($json['q']) ? trim($json['q']) : '';
         $clientModel = isset($json['model']) ? trim($json['model']) : null;
         if (!$q) {
