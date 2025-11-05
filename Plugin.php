@@ -77,9 +77,9 @@ class AIAbstractor_Plugin implements Typecho_Plugin_Interface
     public static function header()
     {
         // 检查是否在管理后台或特殊页面，如果是则直接返回
-        // 注意：不跳过/action/，保持与footer()一致
         if (isset($_SERVER['REQUEST_URI']) && (
             strpos($_SERVER['REQUEST_URI'], '/admin/') !== false ||
+            strpos($_SERVER['REQUEST_URI'], '/action/') !== false ||
             strpos($_SERVER['REQUEST_URI'], '/feed') !== false ||
             strpos($_SERVER['REQUEST_URI'], '/rss') !== false
         )) {
@@ -121,7 +121,7 @@ class AIAbstractor_Plugin implements Typecho_Plugin_Interface
         // 使用Helper::url()或直接构建，确保路径正确
         $index = rtrim($options->index, '/');
         // Typecho的action路由格式：/action/actionName
-        $actionUrl = $index . '/action/ai-abstractor';
+        $actionUrl = $pluginUrl . '/api.php';
         
         $inject = array(
             'apiEndpoint' => $actionUrl,
