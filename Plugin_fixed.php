@@ -2,12 +2,13 @@
 if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 
 /**
- * AIAbstractor - 基于 OpenAI 标准接口的文章摘要插件
+ * AIAbstractor - 基于 OpenAI 标准接口的文章摘要插件 (修复版)
  * 
  * @package AIAbstractor
  * @author Your Name
- * @version 1.0.0
+ * @version 1.0.1
  * @link https://github.com/your/repo
+ * @fix 修复HTTP 404错误问题
  */
 
 class AIAbstractor_Plugin implements Typecho_Plugin_Interface
@@ -19,12 +20,19 @@ class AIAbstractor_Plugin implements Typecho_Plugin_Interface
 
         // 注册 Action（Typecho 标准方式）
         Helper::addAction('ai-abstractor', 'AIAbstractor_Action');
-        return _t('AIAbstractor 插件已启用');
+        
+        // 添加调试日志
+        if (defined('__TYPECHO_DEBUG__') && __TYPECHO_DEBUG__) {
+            error_log('AIAbstractor: 插件已激活，Action已注册');
+        }
+        
+        return _t('AIAbstractor 插件已启用 (修复版)');
     }
 
     public static function deactivate()
     {
         Helper::removeAction('ai-abstractor');
+        return _t('AIAbstractor 插件已禁用');
     }
 
     public static function config(Typecho_Widget_Helper_Form $form)
@@ -70,6 +78,20 @@ class AIAbstractor_Plugin implements Typecho_Plugin_Interface
             'autoInject', array('1' => _t('开启'), '0' => _t('关闭')), '1', _t('自动插入前端资源')
         );
         $form->addInput($autoInject);
+        
+        // 新增：API端点格式选择
+        $apiFormat = new Typecho_Widget_Helper_Form_Element_Radio(
+            'apiFormat', 
+            array(
+                'standard' => _t('标准格式 (/action/ai-abstractor)'),
+                'index' => _t('带index.php (/index.php/action/ai-abstractor)'),
+                'query' => _t('查询参数 (/?action=ai-abstractor)')
+            ), 
+            'standard', 
+            _t('API端点格式'),
+            _t('如果标准格式出现404错误，请尝试其他格式')
+        );
+        $form->addInput($apiFormat);
     }
 
     public static function personalConfig(Typecho_Widget_Helper_Form $form) {}
@@ -77,7 +99,6 @@ class AIAbstractor_Plugin implements Typecho_Plugin_Interface
     public static function header()
     {
         // 检查是否在管理后台或特殊页面，如果是则直接返回
-        // 注意：不跳过/action/，保持与footer()一致
         if (isset($_SERVER['REQUEST_URI']) && (
             strpos($_SERVER['REQUEST_URI'], '/admin/') !== false ||
             strpos($_SERVER['REQUEST_URI'], '/feed') !== false ||
@@ -99,7 +120,6 @@ class AIAbstractor_Plugin implements Typecho_Plugin_Interface
     public static function footer()
     {
         // 检查是否在管理后台或特殊页面，如果是则直接返回
-        // 注意：不跳过/action/，因为需要输出API端点配置
         if (isset($_SERVER['REQUEST_URI']) && (
             strpos($_SERVER['REQUEST_URI'], '/admin/') !== false ||
             strpos($_SERVER['REQUEST_URI'], '/feed') !== false ||
@@ -117,11 +137,22 @@ class AIAbstractor_Plugin implements Typecho_Plugin_Interface
             return;
         }
 
-        // 构建正确的Action URL - Typecho标准方式
-        // 使用Helper::url()或直接构建，确保路径正确
+        // 根据配置选择API端点格式
+        $apiFormat = isset($settings->apiFormat) ? $settings->apiFormat : 'standard';
         $index = rtrim($options->index, '/');
-        // Typecho的action路由格式：/action/actionName
-        $actionUrl = $index . '/action/ai-abstractor';
+        
+        switch ($apiFormat) {
+            case 'index':
+                $actionUrl = $index . '/index.php/action/ai-abstractor';
+                break;
+            case 'query':
+                $actionUrl = $index . '/?action=ai-abstractor';
+                break;
+            case 'standard':
+            default:
+                $actionUrl = $index . '/action/ai-abstractor';
+                break;
+        }
         
         $inject = array(
             'apiEndpoint' => $actionUrl,
@@ -134,6 +165,11 @@ class AIAbstractor_Plugin implements Typecho_Plugin_Interface
         echo '<link rel="stylesheet" href="' . htmlspecialchars($css) . '">';
         echo '<script>window.AIAbstractorConfigOverrides=' . json_encode($inject, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ';</script>';
         echo '<script src="' . htmlspecialchars($js) . '"></script>';
+        
+        // 添加调试信息
+        if (defined('__TYPECHO_DEBUG__') && __TYPECHO_DEBUG__) {
+            echo '<!-- AIAbstractor API Endpoint: ' . htmlspecialchars($actionUrl) . ' -->';
+        }
     }
 }
 
@@ -143,6 +179,11 @@ class AIAbstractor_Action extends Typecho_Widget implements Widget_Interface_Do
     {
         // 设置响应头
         $this->response->setHeader('Content-Type', 'application/json; charset=utf-8');
+        
+        // 添加CORS头（如果需要）
+        $this->response->setHeader('Access-Control-Allow-Origin', '*');
+        $this->response->setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+        $this->response->setHeader('Access-Control-Allow-Headers', 'Content-Type');
         
         // 仅允许 POST
         if ($this->request->isPost()) {
@@ -211,7 +252,7 @@ class AIAbstractor_Action extends Typecho_Widget implements Widget_Interface_Do
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, array(
             'Authorization: Bearer ' . $apiKey,
-            'Content-Type: application/json'
+            'Content-Type: 'application/json'
         ));
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);

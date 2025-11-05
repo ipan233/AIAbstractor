@@ -18,6 +18,7 @@ if (!window.AIAbstractorConfig) {
 if (typeof window !== 'undefined' && window.AIAbstractorConfigOverrides) {
   try {
     Object.assign(window.AIAbstractorConfig, window.AIAbstractorConfigOverrides);
+    console.log(`${window.AIAbstractorConfig.appName} 配置已合并：`, window.AIAbstractorConfig);
   } catch (e) {
     console.warn("AI摘要工具：合并后台配置失败", e);
   }
@@ -70,7 +71,7 @@ function insertAIDiv(selector) {
 
   const aiToggleDiv = document.createElement('div');
   aiToggleDiv.id = `${window.AIAbstractorConfig.classNamePrefix}-Toggle`;
-  aiToggleDiv.textContent = '生成摘要';
+  aiToggleDiv.textContent = '生成';
   // 点击时触发 runAIAbstractor 函数
   aiToggleDiv.addEventListener('click', runAIAbstractor);
   aiTitleDiv.appendChild(aiToggleDiv);
@@ -160,6 +161,10 @@ var AIAbstractor = {
 
     try {
       window.StreamAIAbstractorFetchWait = true;
+      
+      // 调试：输出API端点URL
+      console.log(`${window.AIAbstractorConfig.appName} 请求API端点：`, apiUrl);
+      
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -168,8 +173,14 @@ var AIAbstractor = {
         body: JSON.stringify({ q: prompt, model: window.AIAbstractorConfig.model })
       });
 
+      // 调试：输出响应状态
+      console.log(`${window.AIAbstractorConfig.appName} API响应状态：`, response.status, response.statusText);
+
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        // 如果是404，尝试获取响应内容以便调试
+        const errorText = await response.text().catch(() => '无法获取错误详情');
+        console.error(`${window.AIAbstractorConfig.appName} API错误响应：`, errorText);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
